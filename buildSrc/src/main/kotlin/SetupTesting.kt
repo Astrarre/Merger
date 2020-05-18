@@ -20,8 +20,9 @@ fun Project.setupTesting() {
         group = "testing"
         from(sourceSets["testOriginalJar"].output)
 
+
         destinationDirectory.set(destination)
-        archiveBaseName.set("original-jar")
+        archiveFileName.set("original-jar.jar")
     }
 
     val patchJar = tasks.create("patchJar", Jar::class.java) {
@@ -29,7 +30,7 @@ fun Project.setupTesting() {
         from(sourceSets["testPatchJar"].output)
 
         destinationDirectory.set(destination)
-        archiveBaseName.set("patch-jar")
+        archiveFileName.set("patch-jar.jar")
     }
 
     tasks.withType<Test> {

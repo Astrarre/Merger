@@ -1,4 +1,5 @@
 public class TestOriginalClass {
+
     private void privateVoid() {
         System.out.println("Original");
     }
@@ -8,7 +9,7 @@ public class TestOriginalClass {
     }
 
     protected static String protectedStatic() {
-        return "original";
+        return "Original";
     }
 
     int packageArgs(int arg1, int arg2) {
@@ -19,4 +20,12 @@ public class TestOriginalClass {
         return 123;
     }
 
+    public static void main(String[] args) {
+        TestOriginalClass test = new TestOriginalClass();
+        test.privateVoid();
+        System.out.println(test.publicInt());
+        System.out.println(protectedStatic());
+        System.out.println(test.packageArgs(5, 10));
+        System.out.println(test.notOverwritten());
+    }
 }

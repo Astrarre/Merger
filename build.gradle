@@ -3,7 +3,9 @@ plugins {
 }
 
 sourceSets {
-    testPatchJar
+    testPatchJar {
+        compileClasspath += main.output
+    }
     testOriginalJar
 }
 
@@ -18,6 +20,7 @@ dependencies {
     implementation("org.ow2.asm:asm:8.0.1")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.3.72")
     implementation 'junit:junit:4.13'
+    implementation 'org.ow2.asm:asm-tree:8.0.1'
 }
 
 compileKotlin {
