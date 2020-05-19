@@ -14,30 +14,28 @@ class SetupTesting : Plugin<Project> {
     }
 }
 
+private fun Project.createTestSourceSet(name: String): Jar {
+    val sourceSet = sourceSets.create(name)
+    return tasks.create(name, Jar::class.java) {
+        group = "testing"
+        from(sourceSet.output)
+
+        destinationDirectory.set(sourceSets["test"].resources.srcDirs.first())
+        archiveFileName.set("$name.jar")
+    }
+}
+
 fun Project.setupTesting() {
-    val destination = sourceSets["test"].resources.srcDirs.first()
-    val originalJar = tasks.create("originalJar", Jar::class.java) {
-        group = "testing"
-        from(sourceSets["testOriginalJar"].output)
+    val original = createTestSourceSet("testOriginalJar")
+    val patch = createTestSourceSet("testPatchJar")
+    val erroring = createTestSourceSet("testErrorPatchJar")
 
+    sourceSets["testPatchJar"].compileClasspath += sourceSets["main"].output
+    sourceSets["testErrorPatchJar"].compileClasspath += sourceSets["main"].output
 
-        destinationDirectory.set(destination)
-        archiveFileName.set("original-jar.jar")
+    tasks.named("processTestResources") {
+        dependsOn(original, patch, erroring)
     }
-
-    val patchJar = tasks.create("patchJar", Jar::class.java) {
-        group = "testing"
-        from(sourceSets["testPatchJar"].output)
-
-        destinationDirectory.set(destination)
-        archiveFileName.set("patch-jar.jar")
-    }
-
-    tasks.withType<Test> {
-        dependsOn(originalJar, patchJar)
-    }
-
-
 }
 
 val Project.sourceSets: SourceSetContainer

@@ -1,6 +1,7 @@
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.tree.ClassNode
+import org.objectweb.asm.tree.MethodNode
 import java.nio.file.FileSystem
 import java.nio.file.FileSystems
 import java.nio.file.Files
@@ -21,6 +22,9 @@ private fun Path.writeBytes(bytes: ByteArray) = Files.write(this, bytes)
 //TODO: actually test the working patch jar using classloaders, and remove the usage of prints
 //TODO: test fields
 fun merge(originalJar: Path, patchJar: Path, destJar: Path): Result {
+    require(destJar.parent.exists()) { "The chosen destination path '$destJar' is not in any existing directory." }
+    require(destJar.parent.isDirectory()) { "The parent of the chosen destination path '$destJar' is not a directory." }
+
     destJar.deleteIfExists()
     destJar.createJar()
 
@@ -56,37 +60,94 @@ fun merge(originalJar: Path, patchJar: Path, destJar: Path): Result {
     for (error in combined.errors) {
         println(error)
     }
+    if (combined.errored()) destJar.deleteIfExists()
 
     return combined
 
 //    require(combined.success()) { "There were errors merging jars. See above log." }
 
 }
+//TODO: test with inheriance and using parent method
 
 //TODO: inner classes
+
+
 private fun mergeClasses(originalClass: Path, patchClass: Path, destClass: Path): Result {
     val original = readToClassNode(originalClass)
     val patch = readToClassNode(patchClass)
 
     val methodMatch = match(original.methodsWrapped, patch.methodsWrapped)
-    val fieldMatch = match(original.fieldsWrapped, original.fieldsWrapped)
+    val fieldMatch = match(original.fieldsWrapped, patch.fieldsWrapped)
 
     val result = methodMatch.verify("method") + fieldMatch.verify("field")
     if (result.errored()) return result
 
-//    original.methods.clear()
-//    for (method in methodMatch.onlyInPatch + methodMatch.onlyInOriginal) {
-//        original.methods.add(method.node)
-//    }
-//    for (patchedNode in methodMatch.replacing) {
-//        original.methods.add(patchedNode.node)
-//    }
+    replaceMembers(original.methods, methodMatch)
+    replaceMembers(original.fields, fieldMatch)
 
     val writer = ClassWriter(0)
     original.accept(writer)
     destClass.writeBytes(writer.toByteArray())
 
     return Result.Success
+}
+
+private fun <N : AsmNode<Orig>, Orig> replaceMembers(oldMembers: MutableList<Orig>, match: SpecificMatch<N, Orig>) {
+    oldMembers.clear()
+
+    for (member in match.onlyInPatch + match.onlyInOriginal) {
+        oldMembers.add(member.node)
+    }
+    for (patchedMember in match.replacing) {
+        oldMembers.add(patchedMember.node)
+    }
+}
+
+private inline fun <T> Iterable<T>.theOnly(filterer: (T) -> Boolean): T? {
+    val filtered = filter(filterer)
+    check(filtered.size != 1)
+    return filtered.firstOrNull()
+}
+
+private fun mergeInitializers(origMethods: MutableList<MethodNode>, patchMethods: MutableList<MethodNode>) {
+    mergeInitializers(origMethods, patchMethods) { isInstanceInitializer }
+    mergeInitializers(origMethods, patchMethods) { isStaticInitializer }
+}
+
+/**
+ * If both the original methods and the patch methods contain the same initializer (instance or static), remove the initializer
+ * from the patch methods and insert the body of it after the end of the body of the same original initializer.
+ * I.e.
+ * In original:
+ * {
+ *   print("foo")
+ * }
+ * In patch:
+ * {
+ *  print("bar")
+ * }
+ *
+ * This will become:
+ * {
+ *  print("foo")
+ *  print("bar")
+ * }
+ */
+private inline fun mergeInitializers(
+    origMethods: MutableList<MethodNode>, patchMethods: MutableList<MethodNode>,
+    crossinline initializerType: MethodNode.() -> Boolean
+) {
+    val origInit = origMethods.theOnly { it.initializerType() }
+    val patchInit = patchMethods.theOnly { it.initializerType() }
+
+    if (origInit != null && patchInit != null) {
+        mergeMethods(origInit, patchInit)
+        patchMethods.remove(patchInit)
+    }
+}
+
+private fun mergeMethods(targetMethod: MethodNode, appendedMethod: MethodNode) {
+    TODO()
 }
 
 private fun readToClassNode(classFile: Path): ClassNode = classFile.inputStream().use { stream ->
@@ -135,9 +196,6 @@ private fun Match<*>.cleanAnnotations() = replacing.forEach { patch ->
     // Remove @Replace annotation
     patch.annotations.removeIf { it.desc == ReplaceAnnotationDesc }
 }
-
-
-
 
 
 private fun Match<*>.log(name: String) = println(

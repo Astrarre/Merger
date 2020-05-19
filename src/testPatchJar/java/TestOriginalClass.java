@@ -1,30 +1,34 @@
 import ladder.merger.annotations.Replace;
 
-//TODO: test fields
 public class TestOriginalClass {
     @Replace
-    public TestOriginalClass(int param) {
-        System.out.println("Patched param = " + param);
-    }
+    private int instanceField;
+    @Replace
+    public static String staticField;
+
+    public int notReplacingField;
 
     @Replace
     private void privateVoid() {
-        System.out.println("Patched");
+        instanceField = 12;
+        notReplacingMethod();
     }
 
+    @Replace
     public int publicInt() {
-        return utility();
+        return 69;
     }
-
+    @Replace
     protected static String protectedStatic() {
-        return "Patched";
+        return "Replaced";
     }
-
+    @Replace
     int packageArgs(int arg1, int arg2) {
         return arg1 * arg2;
     }
 
-    private int utility() {
-        return -10;
+    public void notReplacingMethod(){
+        notReplacingField = 23;
     }
+
 }
