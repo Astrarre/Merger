@@ -7,4 +7,6 @@ public class TestInitializers {
     public static String staticFieldInitializerInitializer = "OrigInitializerInitializer";
     public static String staticFieldInitializerNoInitializer = "OrigInitializerNoInitializer";
     public static String staticFieldNoInitializerNoInitializer;
+
+    public String chainedInit = Integer.toString(Integer.parseInt(new String("123")), 10);
 }

@@ -30,7 +30,7 @@ fun <N : AsmNode<Orig>, Orig> match(originals: List<N>, patches: List<N>): Speci
 
     val common = origMap
         .filter { (id, node) ->
-            if (node.isInitializer) node.hasAnnotation(ReplaceAnnotationDesc) else patchMap.containsKey(
+            /*if (node.isInitializer) node.hasAnnotation(ReplaceAnnotationDesc) else*/ patchMap.containsKey(
                 id
             )
         }

@@ -14,7 +14,7 @@ public class TestInitializers {
     @Replace
     public static String staticFieldInitializerInitializer = "ReplaceInit";
     @Replace
-    public static String staticFieldInitializerNoInitializer = "OrigInitializerNoInitializer";
+    public static String staticFieldInitializerNoInitializer;
     @Replace
     public static String staticFieldNoInitializerNoInitializer;
 }

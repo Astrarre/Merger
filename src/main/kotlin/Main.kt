@@ -63,23 +63,26 @@ fun merge(originalJar: Path, patchJar: Path, destJar: Path): Result {
     if (combined.errored()) destJar.deleteIfExists()
 
     return combined
-
-//    require(combined.success()) { "There were errors merging jars. See above log." }
-
 }
-//TODO: test with inheriance and using parent method
 
 //TODO: inner classes
 
+private const val OBJECT_CLASS = "java/lang/Object"
 
 private fun mergeClasses(originalClass: Path, patchClass: Path, destClass: Path): Result {
     val original = readToClassNode(originalClass)
     val patch = readToClassNode(patchClass)
 
+    // Only Object is allowed to be the superclass
+    val superCheckResult = if(patch.superName == OBJECT_CLASS) Result.Success
+    else Result(listOf("The class ${patch.name} is extending ${patch.superName}, but extending other classes is not allowed."))
+
+    mergeInitializers(original.methods, patch.methods)
+
     val methodMatch = match(original.methodsWrapped, patch.methodsWrapped)
     val fieldMatch = match(original.fieldsWrapped, patch.fieldsWrapped)
 
-    val result = methodMatch.verify("method") + fieldMatch.verify("field")
+    val result = superCheckResult + methodMatch.verify("method") + fieldMatch.verify("field")
     if (result.errored()) return result
 
     replaceMembers(original.methods, methodMatch)
@@ -105,13 +108,15 @@ private fun <N : AsmNode<Orig>, Orig> replaceMembers(oldMembers: MutableList<Ori
 
 private inline fun <T> Iterable<T>.theOnly(filterer: (T) -> Boolean): T? {
     val filtered = filter(filterer)
-    check(filtered.size != 1)
+
+    check(filtered.size <= 1)
+
     return filtered.firstOrNull()
 }
 
 private fun mergeInitializers(origMethods: MutableList<MethodNode>, patchMethods: MutableList<MethodNode>) {
-    mergeInitializers(origMethods, patchMethods) { isInstanceInitializer }
-    mergeInitializers(origMethods, patchMethods) { isStaticInitializer }
+    mergeInitializers(origMethods, patchMethods, handleSuperCall = true) { isInstanceInitializer }
+    mergeInitializers(origMethods, patchMethods, handleSuperCall = false) { isStaticInitializer }
 }
 
 /**
@@ -134,20 +139,42 @@ private fun mergeInitializers(origMethods: MutableList<MethodNode>, patchMethods
  * }
  */
 private inline fun mergeInitializers(
-    origMethods: MutableList<MethodNode>, patchMethods: MutableList<MethodNode>,
+    origMethods: MutableList<MethodNode>, patchMethods: MutableList<MethodNode>, handleSuperCall: Boolean,
     crossinline initializerType: MethodNode.() -> Boolean
 ) {
     val origInit = origMethods.theOnly { it.initializerType() }
     val patchInit = patchMethods.theOnly { it.initializerType() }
 
     if (origInit != null && patchInit != null) {
-        mergeMethods(origInit, patchInit)
+        mergeMethods(origInit, patchInit, handleSuperCall)
         patchMethods.remove(patchInit)
     }
 }
 
-private fun mergeMethods(targetMethod: MethodNode, appendedMethod: MethodNode) {
-    TODO()
+private const val RETURN_OPCODE = 177
+private const val ALOAD_OPCODE = 25
+private const val INVOKESPECIAL_OPCODE = 183
+
+
+//private val AbstractInsnNode.isRealInstruction get() = opcode != -1
+//private fun InsnList.removeLastRealInstruction() = remove(last { it.isRealInstruction })
+//private fun InsnList.realInstruction(index : Int) = filter { it.isRealInstruction }[index]
+
+private fun mergeMethods(targetMethod: MethodNode, appendedMethod: MethodNode, handleSuperCall: Boolean) {
+    val originalInstructions = targetMethod.instructions
+    // Remove the RETURN of the target method, so it won't stop early. Only the RETURN of the appended method is wanted.
+    originalInstructions.remove(originalInstructions.last { it.opcode == RETURN_OPCODE })
+
+    if (handleSuperCall) {
+        val patchInstructions = appendedMethod.instructions
+        // Remove the super call. Only the super call of the target method is wanted.
+        patchInstructions.remove(patchInstructions.first { it.opcode == INVOKESPECIAL_OPCODE })
+        // Remove the ALOAD that belongs to the super call that we removed
+        patchInstructions.remove(patchInstructions.first { it.opcode == ALOAD_OPCODE })
+    }
+
+
+    originalInstructions.add(appendedMethod.instructions)
 }
 
 private fun readToClassNode(classFile: Path): ClassNode = classFile.inputStream().use { stream ->

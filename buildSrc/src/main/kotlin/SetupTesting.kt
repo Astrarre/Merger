@@ -32,6 +32,7 @@ fun Project.setupTesting() {
 
     sourceSets["testPatchJar"].compileClasspath += sourceSets["main"].output
     sourceSets["testErrorPatchJar"].compileClasspath += sourceSets["main"].output
+    sourceSets["test"].compileClasspath += sourceSets["testOriginalJar"].output
 
     tasks.named("processTestResources") {
         dependsOn(original, patch, erroring)
