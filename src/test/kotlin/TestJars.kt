@@ -3,6 +3,7 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
 class TestJars {
+
     @Test
     fun testMerge() {
         val original = getResource("testOriginalJar.jar")
