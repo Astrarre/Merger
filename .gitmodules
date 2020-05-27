@@ -1,3 +1,4 @@
 [submodule "MetaUtils"]
 	path = MetaUtils
 	url = https://github.com/IntransientMC/MetaUtils
+	branch = master
