@@ -1,3 +1,7 @@
+import asm.AsmNode
+import asm.ClassAsmNode
+import asm.FieldAsmNode
+import asm.MethodAsmNode
 import org.objectweb.asm.tree.MethodNode
 
 data class SpecificMatch<N : AsmNode<Orig>, Orig>(
@@ -10,19 +14,7 @@ data class SpecificMatch<N : AsmNode<Orig>, Orig>(
 
 typealias Match<N> = SpecificMatch<N, *>
 
-val AsmNode<*>.isInitializer
-    get() = when (this) {
-        is ClassAsmNode -> false
-        is FieldAsmNode -> false
-        is MethodAsmNode -> node.desc == "()V" && (node.name == "<init>" || node.name == "<clinit>")
-    }
 
-val MethodNode.isConstructor get() = name == "<init>"
-val MethodNode.isVoid get() = desc == "()V"
-val MethodNode.isInstanceInitializer get() = isVoid && isConstructor
-val MethodNode.isStaticInitializer get() = name == "<clinit>"
-
-fun AsmNode<*>.hasAnnotation(annotation: String) = annotations.any { it.desc == annotation }
 
 fun <N : AsmNode<Orig>, Orig> match(originals: List<N>, patches: List<N>): SpecificMatch<N, Orig> {
     val origMap = originals.map { it.uniqueIdentifier to it }.toMap()

@@ -1,3 +1,4 @@
+import asm.*
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.tree.ClassNode
@@ -8,19 +9,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.jar.JarOutputStream
 
-private fun Path.exists() = Files.exists(this)
-private fun Path.deleteIfExists() = Files.deleteIfExists(this)
-private fun Path.openJar(usage: (FileSystem) -> Unit) = FileSystems.newFileSystem(this, null).use(usage)
-private fun Path.walk(usage: (Path) -> Unit) = Files.walk(this).forEach(usage)
-private fun Path.createJar() = JarOutputStream(Files.newOutputStream(this)).close()
-private fun Path.isDirectory() = Files.isDirectory(this)
-private fun Path.createDirectory() = Files.isDirectory(this)
-private fun Path.inputStream() = Files.newInputStream(this)
-private fun Path.writeBytes(bytes: ByteArray) = Files.write(this, bytes)
 
-//TODO: test with an "error" patch jar
-//TODO: actually test the working patch jar using classloaders, and remove the usage of prints
-//TODO: test fields
+
 fun merge(originalJar: Path, patchJar: Path, destJar: Path): Result {
     require(destJar.parent.exists()) { "The chosen destination path '$destJar' is not in any existing directory." }
     require(destJar.parent.isDirectory()) { "The parent of the chosen destination path '$destJar' is not a directory." }
@@ -29,29 +19,25 @@ fun merge(originalJar: Path, patchJar: Path, destJar: Path): Result {
     destJar.createJar()
 
     val results = mutableListOf<Result>()
-    destJar.openJar { newFs ->
-        originalJar.openJar { originalFs ->
-            patchJar.openJar { patchFs ->
-                originalFs.getPath("/").walk { currentFile ->
-                    if (currentFile.toString() == "/") return@walk
+    openJars(destJar, originalJar, patchJar) { newFs, originalFs, patchFs ->
+        originalFs.getPath("/").walk { currentFile ->
+            if (currentFile.toString() == "/") return@walk
 
-                    val originalFile = originalFs.getPath(currentFile.toString())
-                    val patchFile = patchFs.getPath(currentFile.toString())
-                    val newFile = newFs.getPath(currentFile.toString())
+            val originalFile = originalFs.getPath(currentFile.toString())
+            val patchFile = patchFs.getPath(currentFile.toString())
+            val newFile = newFs.getPath(currentFile.toString())
 
-                    if (currentFile.isDirectory()) {
-                        newFile.createDirectory()
-                    }
+            if (currentFile.isDirectory()) {
+                newFile.createDirectory()
+            }
 
-                    assert(originalFile.exists())
-                    assert(!newFile.exists())
+            assert(originalFile.exists())
+//            assert(!newFile.exists())
 
-                    if (currentFile.toString().endsWith(".class") && patchFile.exists()) {
-                        results.add(mergeClasses(originalFile, patchFile, newFile))
-                    } else {
-                        Files.copy(originalFile, newFile)
-                    }
-                }
+            if (currentFile.toString().endsWith(".class") && patchFile.exists()) {
+                results.add(mergeClasses(originalFile, patchFile, newFile))
+            } else {
+                originalFile.copyTo(newFile)
             }
         }
     }
@@ -74,7 +60,7 @@ private fun mergeClasses(originalClass: Path, patchClass: Path, destClass: Path)
     val patch = readToClassNode(patchClass)
 
     // Only Object is allowed to be the superclass
-    val superCheckResult = if(patch.superName == OBJECT_CLASS) Result.Success
+    val superCheckResult = if (patch.superName == OBJECT_CLASS) Result.Success
     else Result(listOf("The class ${patch.name} is extending ${patch.superName}, but extending other classes is not allowed."))
 
     mergeInitializers(original.methods, patch.methods)
@@ -155,11 +141,6 @@ private const val RETURN_OPCODE = 177
 private const val ALOAD_OPCODE = 25
 private const val INVOKESPECIAL_OPCODE = 183
 
-
-//private val AbstractInsnNode.isRealInstruction get() = opcode != -1
-//private fun InsnList.removeLastRealInstruction() = remove(last { it.isRealInstruction })
-//private fun InsnList.realInstruction(index : Int) = filter { it.isRealInstruction }[index]
-
 private fun mergeMethods(targetMethod: MethodNode, appendedMethod: MethodNode, handleSuperCall: Boolean) {
     val originalInstructions = targetMethod.instructions
     // Remove the RETURN of the target method, so it won't stop early. Only the RETURN of the appended method is wanted.
@@ -177,9 +158,7 @@ private fun mergeMethods(targetMethod: MethodNode, appendedMethod: MethodNode, h
     originalInstructions.add(appendedMethod.instructions)
 }
 
-private fun readToClassNode(classFile: Path): ClassNode = classFile.inputStream().use { stream ->
-    ClassNode().also { ClassReader(stream).accept(it, 0) }
-}
+
 
 data class Result(val errors: List<String>) {
     fun errored(): Boolean = errors.isNotEmpty()
