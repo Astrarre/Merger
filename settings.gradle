@@ -1,3 +1,6 @@
 rootProject.name = 'Merger'
 
+if (!file("MetaUtils").exists() || file("MetaUtils").list().length == 0) {
+    throw new RuntimeException("MetaUtils directory is missing or empty. Make sure you use --recurse-submodules in git clone!")
+}
 includeBuild 'MetaUtils'
